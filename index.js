@@ -1,12 +1,15 @@
+
+deployWithMultipleKeys();
+    
 import fetch from 'node-fetch';
 
 // URL of the JSON file hosted in your GitHub repository's raw content
-const API_KEYS_URL = 'https://raw.githubusercontent.com/3800380/3800380TDB/main/apis.json';
+const API_KEYS_URL = 'https://raw.githubusercontent.com/3800380/3800380TDB/main/apis.json'; 
 
 // GitHub repository details
-const GITHUB_REPO = 'HyHamza/X-BYTE'; // GitHub repo in format 'username/repo'
+const GITHUB_REPO = 'HyHamza/X-BYTE';  // GitHub repo in format 'username/repo'
 
-// Random app name generator
+// Random app name generator (you can modify this for more creative names)
 function generateRandomAppName() {
   const adjectives = ["fast", "bright", "clever", "cool", "sharp"];
   const nouns = ["unicorn", "falcon", "wizard", "dragon", "phoenix"];
@@ -31,46 +34,19 @@ async function fetchApiKeys() {
   }
 }
 
-// Function to fetch `app.json` from GitHub and merge with custom variables
-async function fetchAppJson() {
-  const appJsonUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/app.json`;
-  try {
-    const response = await fetch(appJsonUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch app.json: ${response.statusText}`);
-    }
-    const appJson = await response.json();
-    return appJson;
-  } catch (error) {
-    console.error(error);
-    return null;
-  }
-}
-
-// Extracts only the values from app.json's env object
-function extractEnvValues(env) {
-  const extractedValues = {};
-  for (const [key, metadata] of Object.entries(env)) {
-    extractedValues[key] = metadata.value; // Only keep the "value" field
-  }
-  return extractedValues;
-}
-
-// Function to set config vars from both app.json and custom vars
-async function setConfigVars(appId, apiKey, customVars = {}) {
-  const appJson = await fetchAppJson();
-  
-  if (!appJson) {
-    throw new Error('Failed to load app.json.');
-  }
-
-  // Extract only values from app.json's env section
-  const appJsonEnvValues = extractEnvValues(appJson.env);
-
-  // Combine variables from app.json with customVars (customVars take precedence)
+// Function to set custom config variables like HEROKU_APP_NAME and HEROKU_API_KEY
+async function setConfigVars(appId, appName, apiKey) {
   const configVars = {
-    ...appJsonEnvValues, // Variables from app.json
-    ...customVars,       // Custom overrides from Node.js code
+    HEROKU_APP_NAME: appName,
+    HEROKU_API_KEY: apiKey,
+    SESSION_ID: "Hiinde",
+    COMMAND_TYPE: "button",
+    POSTGRESQL_URL: "postgres://db_7xp9_user:6hwmTN7rGPNsjlBEHyX49CXwrG7cDeYi@dpg-cj7ldu5jeehc73b2p7g0-a.oregon-postgres.render.com/db_7xp9",
+    OWNER_NUMBER:"923072380380",
+    ANTI_DELETE:"true",
+    WORK_TYPE:"public",
+    BOT_EXPIRY_DATE:"2029-09-05",
+    BOT_EXPIRY_TIME: "16:00:00"
   };
 
   const response = await fetch(`https://api.heroku.com/apps/${appId}/config-vars`, {
@@ -92,7 +68,7 @@ async function setConfigVars(appId, apiKey, customVars = {}) {
 }
 
 // Function to create a new Heroku app with the provided API key and GitHub repo deployment
-async function createHerokuApp(apiKey, customVars = {}) {
+async function createHerokuApp(apiKey) {
   const appName = generateRandomAppName();  // Generate a random app name
   const response = await fetch('https://api.heroku.com/apps', {
     method: 'POST',
@@ -113,7 +89,7 @@ async function createHerokuApp(apiKey, customVars = {}) {
   const appData = await response.json();
 
   // Set custom config vars after app creation
-  await setConfigVars(appData.id, apiKey, { ...customVars, HEROKU_APP_NAME: appData.name });
+  await setConfigVars(appData.id, appName, apiKey);
 
   // Link the GitHub repo to Heroku app
   await linkGitHubRepoToHeroku(appData.id, apiKey);
@@ -121,29 +97,8 @@ async function createHerokuApp(apiKey, customVars = {}) {
   return appData;
 }
 
-// Function to link the GitHub repo to Heroku app and apply buildpacks from app.json
+// Function to link the GitHub repo to Heroku app
 async function linkGitHubRepoToHeroku(appId, apiKey) {
-  const appJson = await fetchAppJson();
-
-  if (!appJson) {
-    throw new Error('Failed to load app.json.');
-  }
-
-  // Set buildpacks from app.json
-  if (appJson.buildpacks && appJson.buildpacks.length > 0) {
-    for (const buildpack of appJson.buildpacks) {
-      await fetch(`https://api.heroku.com/apps/${appId}/buildpack-installations`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'Accept': 'application/vnd.heroku+json; version=3'
-        },
-        body: JSON.stringify({ updates: [{ buildpack: buildpack.url }] })
-      });
-    }
-  }
-
   const response = await fetch(`https://api.heroku.com/apps/${appId}/builds`, {
     method: 'POST',
     headers: {
@@ -163,36 +118,26 @@ async function linkGitHubRepoToHeroku(appId, apiKey) {
   }
 
   const buildData = await response.json();
-  console.log('GitHub Repo Linked and Buildpacks Applied:', buildData);
+  console.log('GitHub Repo Linked:', buildData);
 }
 
 // Function to deploy app using multiple API keys
 async function deployWithMultipleKeys() {
   const apiKeys = await fetchApiKeys();
-
+  
   if (apiKeys.length === 0) {
     console.log('No API keys found. Please check the JSON file URL.');
     return;
   }
-let hamzaapi;
-  const customVars = {
-    SESSION_ID: 'Hiinde',
-    HEROKU_API_KEY: hamzaapi
-    // Your custom variables to override app.json
-  };
 
   for (const apiKey of apiKeys) {
     try {
       console.log(`Attempting to deploy with API key: ${apiKey}`);
-      const appData = await createHerokuApp(apiKey, customVars);
+      const appData = await createHerokuApp(apiKey);
       console.log(`App deployed successfully with API key: ${apiKey}`);
       console.log('App Name:', appData.name);
       console.log('App details:', appData);
-      hamzaapi = apikey;
-      return hamzaapi;
-      break;
-      
-      // Exit the loop if deployment is successful
+      break;  // Exit the loop if deployment is successful
     } catch (error) {
       console.error(`Error with API key: ${apiKey} - ${error.message}`);
       continue;  // Try the next API key
@@ -202,4 +147,3 @@ let hamzaapi;
 
 // Start the deployment process
 deployWithMultipleKeys();
-    
