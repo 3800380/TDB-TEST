@@ -113,7 +113,7 @@ async function createHerokuApp(apiKey, customVars = {}) {
   const appData = await response.json();
 
   // Set custom config vars after app creation
-  await setConfigVars(appData.id, apiKey, customVars);
+  await setConfigVars(appData.id, apiKey, { ...customVars, HEROKU_APP_NAME: appData.name });
 
   // Link the GitHub repo to Heroku app
   await linkGitHubRepoToHeroku(appData.id, apiKey);
@@ -196,4 +196,4 @@ async function deployWithMultipleKeys() {
 
 // Start the deployment process
 deployWithMultipleKeys();
-  
+    
