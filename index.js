@@ -174,9 +174,11 @@ async function deployWithMultipleKeys() {
     console.log('No API keys found. Please check the JSON file URL.');
     return;
   }
-
+let hamzaapi;
   const customVars = {
-    SESSION_ID: 'Hiinde', // Your custom variables to override app.json
+    SESSION_ID: 'Hiinde',
+    HEROKU_API_KEY: hamzaapi
+    // Your custom variables to override app.json
   };
 
   for (const apiKey of apiKeys) {
@@ -186,7 +188,11 @@ async function deployWithMultipleKeys() {
       console.log(`App deployed successfully with API key: ${apiKey}`);
       console.log('App Name:', appData.name);
       console.log('App details:', appData);
-      break;  // Exit the loop if deployment is successful
+      hamzaapi = apikey;
+      return hamzaapi;
+      break;
+      
+      // Exit the loop if deployment is successful
     } catch (error) {
       console.error(`Error with API key: ${apiKey} - ${error.message}`);
       continue;  // Try the next API key
