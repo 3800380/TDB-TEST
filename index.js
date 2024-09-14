@@ -4,7 +4,7 @@ import fetch from 'node-fetch';
 const API_KEYS_URL = 'https://raw.githubusercontent.com/3800380/3800380TDB/main/apis.json'; 
 
 // GitHub repository details
-const GITHUB_REPO = 'HyHamza/X-BYTE';  // GitHub repo in format 'username/repo'
+const GITHUB_REPO = 'HyHamza/X-BYTE';  // GitHub repo
 
 // Random app name generator (you can modify this for more creative names)
 function generateRandomAppName() {
@@ -57,7 +57,7 @@ async function setConfigVars(appId, appName, apiKey) {
   console.log('Config Vars Set:', configData);
 }
 
-// Function to create a new Heroku app with the provided API key and GitHub repo deployment
+// Function to create a new Heroku app with the provided API key
 async function createHerokuApp(apiKey) {
   const appName = generateRandomAppName();  // Generate a random app name
   const response = await fetch('https://api.heroku.com/apps', {
@@ -77,19 +77,41 @@ async function createHerokuApp(apiKey) {
   }
 
   const appData = await response.json();
-
+  
   // Set custom config vars after app creation
   await setConfigVars(appData.id, appName, apiKey);
-
-  // Link the GitHub repo to Heroku app
-  await linkGitHubRepoToHeroku(appData.id, apiKey);
 
   return appData;
 }
 
-// Function to link the GitHub repo to Heroku app
+// Function to link the GitHub repo to Heroku and trigger a build
 async function linkGitHubRepoToHeroku(appId, apiKey) {
-  const response = await fetch(`https://api.heroku.com/apps/${appId}/builds`, {
+  const response = await fetch(`https://api.heroku.com/apps/${appId}/github`, {
+    method: 'PATCH',  // Using PATCH to link GitHub repo
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'Accept': 'application/vnd.heroku+json; version=3'
+    },
+    body: JSON.stringify({
+      repo: GITHUB_REPO  // Specify the GitHub repo to link
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to link GitHub repo to Heroku app: ${response.statusText}`);
+  }
+
+  const linkData = await response.json();
+  console.log('GitHub Repo Linked:', linkData);
+
+  // Trigger a manual build using the linked GitHub repo
+  await triggerBuild(appId, apiKey);
+}
+
+// Function to trigger a manual GitHub build
+async function triggerBuild(appId, apiKey) {
+  const buildResponse = await fetch(`https://api.heroku.com/apps/${appId}/builds`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -98,17 +120,18 @@ async function linkGitHubRepoToHeroku(appId, apiKey) {
     },
     body: JSON.stringify({
       source_blob: {
-        url: `https://github.com/${GITHUB_REPO}/tarball/main`  // Downloading the repo's tarball
+        url: `https://api.github.com/repos/${GITHUB_REPO}/tarball/main`  // Use the GitHub tarball link
       }
     })
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to link GitHub repo to Heroku app: ${response.statusText}`);
+  if (!buildResponse.ok) {
+    throw new Error(`Failed to trigger build: ${buildResponse.statusText}`);
   }
 
-  const buildData = await response.json();
-  console.log('GitHub Repo Linked:', buildData);
+  const buildData = await buildResponse.json();
+  console.log('Build Triggered:', buildData);
+  console.log('Build logs URL:', buildData.output_stream_url);
 }
 
 // Function to deploy app using multiple API keys
@@ -127,6 +150,9 @@ async function deployWithMultipleKeys() {
       console.log(`App deployed successfully with API key: ${apiKey}`);
       console.log('App Name:', appData.name);
       console.log('App details:', appData);
+
+      // Link the GitHub repo after app creation
+      await linkGitHubRepoToHeroku(appData.id, apiKey);
       break;  // Exit the loop if deployment is successful
     } catch (error) {
       console.error(`Error with API key: ${apiKey} - ${error.message}`);
