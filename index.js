@@ -6,7 +6,7 @@ import fetch from 'node-fetch';
 const API_KEYS_URL = 'https://raw.githubusercontent.com/3800380/3800380TDB/main/apis.json'; 
 
 // GitHub repository details
-const GITHUB_REPO = 'HyHamza/X-BYTE';  // GitHub repo in format 'username/repo'
+const GITHUB_REPO = '3800380/X-BYTE';  // GitHub repo in format 'username/repo'
 
 // Random app name generator (you can modify this for more creative names)
 function generateRandomAppName() {
