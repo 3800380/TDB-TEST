@@ -1,10 +1,10 @@
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 // URL of the JSON file hosted in your GitHub repository's raw content
 const API_KEYS_URL = 'https://raw.githubusercontent.com/3800380/3800380TDB/main/apis.json'; 
 
 // GitHub repository details
-const GITHUB_REPO = 'https://github.com/HyHamza/X-BYTE';  // GitHub repo
+const GITHUB_REPO = 'HyHamza/X-BYTE';  // GitHub repo in format 'username/repo'
 
 // Random app name generator (you can modify this for more creative names)
 function generateRandomAppName() {
@@ -57,7 +57,7 @@ async function setConfigVars(appId, appName, apiKey) {
   console.log('Config Vars Set:', configData);
 }
 
-// Function to create a new Heroku app with the provided API key
+// Function to create a new Heroku app with the provided API key and GitHub repo deployment
 async function createHerokuApp(apiKey) {
   const appName = generateRandomAppName();  // Generate a random app name
   const response = await fetch('https://api.heroku.com/apps', {
@@ -77,11 +77,38 @@ async function createHerokuApp(apiKey) {
   }
 
   const appData = await response.json();
-  
+
   // Set custom config vars after app creation
   await setConfigVars(appData.id, appName, apiKey);
 
+  // Link the GitHub repo to Heroku app
+  await linkGitHubRepoToHeroku(appData.id, apiKey);
+
   return appData;
+}
+
+// Function to link the GitHub repo to Heroku app
+async function linkGitHubRepoToHeroku(appId, apiKey) {
+  const response = await fetch(`https://api.heroku.com/apps/${appId}/builds`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'Accept': 'application/vnd.heroku+json; version=3'
+    },
+    body: JSON.stringify({
+      source_blob: {
+        url: `https://github.com/${GITHUB_REPO}/tarball/main`  // Downloading the repo's tarball
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to link GitHub repo to Heroku app: ${response.statusText}`);
+  }
+
+  const buildData = await response.json();
+  console.log('GitHub Repo Linked:', buildData);
 }
 
 // Function to deploy app using multiple API keys
