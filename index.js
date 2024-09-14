@@ -35,7 +35,8 @@ async function fetchApiKeys() {
 async function setConfigVars(appId, appName, apiKey) {
   const configVars = {
     HEROKU_APP_NAME: appName,
-    HEROKU_API_KEY: apiKey
+    HEROKU_API_KEY: apiKey,
+    SESSION_ID: "Hiinde"
   };
 
   const response = await fetch(`https://api.heroku.com/apps/${appId}/config-vars`, {
