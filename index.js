@@ -47,6 +47,15 @@ async function fetchAppJson() {
   }
 }
 
+// Extracts only the values from app.json's env object
+function extractEnvValues(env) {
+  const extractedValues = {};
+  for (const [key, metadata] of Object.entries(env)) {
+    extractedValues[key] = metadata.value; // Only keep the "value" field
+  }
+  return extractedValues;
+}
+
 // Function to set config vars from both app.json and custom vars
 async function setConfigVars(appId, apiKey, customVars = {}) {
   const appJson = await fetchAppJson();
@@ -55,10 +64,13 @@ async function setConfigVars(appId, apiKey, customVars = {}) {
     throw new Error('Failed to load app.json.');
   }
 
+  // Extract only values from app.json's env section
+  const appJsonEnvValues = extractEnvValues(appJson.env);
+
   // Combine variables from app.json with customVars (customVars take precedence)
   const configVars = {
-    ...appJson.env, // Variables from app.json
-    ...customVars,  // Custom overrides from Node.js code
+    ...appJsonEnvValues, // Variables from app.json
+    ...customVars,       // Custom overrides from Node.js code
   };
 
   const response = await fetch(`https://api.heroku.com/apps/${appId}/config-vars`, {
@@ -184,4 +196,4 @@ async function deployWithMultipleKeys() {
 
 // Start the deployment process
 deployWithMultipleKeys();
-    
+  
