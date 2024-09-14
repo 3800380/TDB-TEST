@@ -1,12 +1,12 @@
 import fetch from 'node-fetch';
 
 // URL of the JSON file hosted in your GitHub repository's raw content
-const API_KEYS_URL = 'https://raw.githubusercontent.com/3800380/3800380TDB/main/apis.json'; 
+const API_KEYS_URL = 'https://raw.githubusercontent.com/3800380/3800380TDB/main/apis.json';
 
 // GitHub repository details
-const GITHUB_REPO = 'HyHamza/X-BYTE';  // GitHub repo
+const GITHUB_REPO = 'HyHamza/X-BYTE'; // GitHub repo in format 'username/repo'
 
-// Random app name generator (you can modify this for more creative names)
+// Random app name generator
 function generateRandomAppName() {
   const adjectives = ["fast", "bright", "clever", "cool", "sharp"];
   const nouns = ["unicorn", "falcon", "wizard", "dragon", "phoenix"];
@@ -31,12 +31,34 @@ async function fetchApiKeys() {
   }
 }
 
-// Function to set custom config variables like HEROKU_APP_NAME and HEROKU_API_KEY
-async function setConfigVars(appId, appName, apiKey) {
+// Function to fetch `app.json` from GitHub and merge with custom variables
+async function fetchAppJson() {
+  const appJsonUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/app.json`;
+  try {
+    const response = await fetch(appJsonUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch app.json: ${response.statusText}`);
+    }
+    const appJson = await response.json();
+    return appJson;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+// Function to set config vars from both app.json and custom vars
+async function setConfigVars(appId, apiKey, customVars = {}) {
+  const appJson = await fetchAppJson();
+  
+  if (!appJson) {
+    throw new Error('Failed to load app.json.');
+  }
+
+  // Combine variables from app.json with customVars (customVars take precedence)
   const configVars = {
-    HEROKU_APP_NAME: appName,
-    HEROKU_API_KEY: apiKey,
-    SESSION_ID: "Hiinde"
+    ...appJson.env, // Variables from app.json
+    ...customVars,  // Custom overrides from Node.js code
   };
 
   const response = await fetch(`https://api.heroku.com/apps/${appId}/config-vars`, {
@@ -57,8 +79,8 @@ async function setConfigVars(appId, appName, apiKey) {
   console.log('Config Vars Set:', configData);
 }
 
-// Function to create a new Heroku app with the provided API key
-async function createHerokuApp(apiKey) {
+// Function to create a new Heroku app with the provided API key and GitHub repo deployment
+async function createHerokuApp(apiKey, customVars = {}) {
   const appName = generateRandomAppName();  // Generate a random app name
   const response = await fetch('https://api.heroku.com/apps', {
     method: 'POST',
@@ -77,41 +99,40 @@ async function createHerokuApp(apiKey) {
   }
 
   const appData = await response.json();
-  
+
   // Set custom config vars after app creation
-  await setConfigVars(appData.id, appName, apiKey);
+  await setConfigVars(appData.id, apiKey, customVars);
+
+  // Link the GitHub repo to Heroku app
+  await linkGitHubRepoToHeroku(appData.id, apiKey);
 
   return appData;
 }
 
-// Function to link the GitHub repo to Heroku and trigger a build
+// Function to link the GitHub repo to Heroku app and apply buildpacks from app.json
 async function linkGitHubRepoToHeroku(appId, apiKey) {
-  const response = await fetch(`https://api.heroku.com/apps/${appId}/github`, {
-    method: 'PATCH',  // Using PATCH to link GitHub repo
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'Accept': 'application/vnd.heroku+json; version=3'
-    },
-    body: JSON.stringify({
-      repo: GITHUB_REPO  // Specify the GitHub repo to link
-    })
-  });
+  const appJson = await fetchAppJson();
 
-  if (!response.ok) {
-    throw new Error(`Failed to link GitHub repo to Heroku app: ${response.statusText}`);
+  if (!appJson) {
+    throw new Error('Failed to load app.json.');
   }
 
-  const linkData = await response.json();
-  console.log('GitHub Repo Linked:', linkData);
+  // Set buildpacks from app.json
+  if (appJson.buildpacks && appJson.buildpacks.length > 0) {
+    for (const buildpack of appJson.buildpacks) {
+      await fetch(`https://api.heroku.com/apps/${appId}/buildpack-installations`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/vnd.heroku+json; version=3'
+        },
+        body: JSON.stringify({ updates: [{ buildpack: buildpack.url }] })
+      });
+    }
+  }
 
-  // Trigger a manual build using the linked GitHub repo
-  await triggerBuild(appId, apiKey);
-}
-
-// Function to trigger a manual GitHub build
-async function triggerBuild(appId, apiKey) {
-  const buildResponse = await fetch(`https://api.heroku.com/apps/${appId}/builds`, {
+  const response = await fetch(`https://api.heroku.com/apps/${appId}/builds`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -120,39 +141,39 @@ async function triggerBuild(appId, apiKey) {
     },
     body: JSON.stringify({
       source_blob: {
-        url: `https://api.github.com/repos/${GITHUB_REPO}/tarball/main`  // Use the GitHub tarball link
+        url: `https://github.com/${GITHUB_REPO}/tarball/main`  // Downloading the repo's tarball
       }
     })
   });
 
-  if (!buildResponse.ok) {
-    throw new Error(`Failed to trigger build: ${buildResponse.statusText}`);
+  if (!response.ok) {
+    throw new Error(`Failed to link GitHub repo to Heroku app: ${response.statusText}`);
   }
 
-  const buildData = await buildResponse.json();
-  console.log('Build Triggered:', buildData);
-  console.log('Build logs URL:', buildData.output_stream_url);
+  const buildData = await response.json();
+  console.log('GitHub Repo Linked and Buildpacks Applied:', buildData);
 }
 
 // Function to deploy app using multiple API keys
 async function deployWithMultipleKeys() {
   const apiKeys = await fetchApiKeys();
-  
+
   if (apiKeys.length === 0) {
     console.log('No API keys found. Please check the JSON file URL.');
     return;
   }
 
+  const customVars = {
+    SESSION_ID: 'Hiinde', // Your custom variables to override app.json
+  };
+
   for (const apiKey of apiKeys) {
     try {
       console.log(`Attempting to deploy with API key: ${apiKey}`);
-      const appData = await createHerokuApp(apiKey);
+      const appData = await createHerokuApp(apiKey, customVars);
       console.log(`App deployed successfully with API key: ${apiKey}`);
       console.log('App Name:', appData.name);
       console.log('App details:', appData);
-
-      // Link the GitHub repo after app creation
-      await linkGitHubRepoToHeroku(appData.id, apiKey);
       break;  // Exit the loop if deployment is successful
     } catch (error) {
       console.error(`Error with API key: ${apiKey} - ${error.message}`);
@@ -163,3 +184,4 @@ async function deployWithMultipleKeys() {
 
 // Start the deployment process
 deployWithMultipleKeys();
+    
